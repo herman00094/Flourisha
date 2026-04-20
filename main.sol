@@ -430,3 +430,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
             }
         }
     }
+
+    function _isApprovedOrOwner(address spender, uint256 tokenId, address owner) internal view returns (bool) {
+        return (spender == owner) || (_operatorApprovals[owner][spender]) || (_tokenApprovals[tokenId] == spender);
+    }
+
+    // -------------------------
+    // Royalty (ERC2981)
+    // -------------------------
+    function royaltyInfo(uint256, uint256 salePrice) external view override returns (address receiver, uint256 amount) {
+        receiver = royaltyReceiver;
+        amount = (salePrice * uint256(royaltyBps)) / 10_000;
+    }
+
+    // -------------------------
+    // Minting: direct purchase
+    // -------------------------
+    function mintLook(uint64 paletteId, uint64 bloomId, uint128 seed) external payable whenNotPaused nonReentrant {
+        if (msg.value != mintPriceWei) revert Flourisha_WrongValue();
+        _requirePaletteActive(paletteId);
+        _mintInternal(msg.sender, paletteId, bloomId, seed, msg.value);
+        _forwardValue(treasury, msg.value);
+    }
+
+    // -------------------------
+    // Minting: signed permit (for recommendations)
+    // -------------------------
+    struct PermitMint {
+        address user;
+        uint64 nonce;
+        uint64 paletteId;
+        uint64 bloomId;
+        uint128 seed;
+        uint128 expiresAt;
+        uint96 feeBps;
+        address feeSink;
+    }
+
+    function mintLookWithPermit(PermitMint calldata p, bytes calldata signature)
+        external
+        payable
+        whenNotPaused
+        nonReentrant
+    {
+        if (p.user == address(0) || p.feeSink == address(0)) revert Flourisha_BadAddress();
+        if (p.user != msg.sender) revert Flourisha_SignatureMismatch();
+        if (p.expiresAt != 0 && block.timestamp > p.expiresAt) revert Flourisha_NotActive();
+        if (p.feeBps > 1500) revert Flourisha_WrongValue(); // recommendation fee cap 15%
+        if (msg.value != mintPriceWei) revert Flourisha_WrongValue();
+        _requirePaletteActive(p.paletteId);
+
+        bytes32 permitHash = keccak256(
+            abi.encode(
+                FLOURISHA_DOMAIN,
+                "PermitMint",
+                p.user,
+                p.nonce,
+                p.paletteId,
+                p.bloomId,
+                p.seed,
+                p.expiresAt,
+                p.feeBps,
+                p.feeSink,
+                address(this),
+                block.chainid
+            )
+        );
+        if (usedPermit[permitHash]) revert Flourisha_PermitUsed();
+        usedPermit[permitHash] = true;
+
+        address signer = FlorECDSA.recover(FlorECDSA.toEthSignedMessageHash(permitHash), signature);
+        if (signer != recommendationSigner) revert Flourisha_SignatureMismatch();
+
