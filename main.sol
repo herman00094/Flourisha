@@ -142,3 +142,75 @@ library FlorECDSA {
         if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             revert FlorECDSA_BadS();
         }
+        if (v != 27 && v != 28) revert FlorECDSA_BadV();
+        address signer = ecrecover(hash, v, r, s);
+        if (signer == address(0)) revert FlorECDSA_BadSig();
+        return signer;
+    }
+
+    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    }
+}
+
+abstract contract FlorReentrancy {
+    uint256 private _status;
+    error FlorGuard_Reentered();
+    constructor() {
+        _status = 1;
+    }
+    modifier nonReentrant() {
+        if (_status != 1) revert FlorGuard_Reentered();
+        _status = 2;
+        _;
+        _status = 1;
+    }
+}
+
+abstract contract FlorPausable {
+    event FlourishaPause(address indexed actor, uint256 indexed at);
+    event FlourishaUnpause(address indexed actor, uint256 indexed at);
+    error Flourisha_Paused();
+    error Flourisha_NotPaused();
+    bool private _paused;
+    function paused() public view returns (bool) { return _paused; }
+    modifier whenNotPaused() { if (_paused) revert Flourisha_Paused(); _; }
+    modifier whenPaused() { if (!_paused) revert Flourisha_NotPaused(); _; }
+    function _pause() internal whenNotPaused { _paused = true; emit FlourishaPause(msg.sender, block.number); }
+    function _unpause() internal whenPaused { _paused = false; emit FlourishaUnpause(msg.sender, block.number); }
+}
+
+contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
+    using FlorStrings for uint256;
+
+    // -------------------------
+    // Uniqueness anchors
+    // -------------------------
+    bytes32 public constant FLOURISHA_DOMAIN = keccak256("Flourisha.floral-health-style.v1");
+    bytes32 public constant NOTEBOOK_TAG = keccak256("Flourisha.notebook.tagline.rose-neroli");
+    bytes32 public constant GENESIS_DUST = bytes32(uint256(0x0f50f7a7f9fb4c055b0d878b5326fab79a3073f38c5aa61c6f81be97e9f7a1f2e));
+    bytes32 public constant STARLING_SEED = bytes32(uint256(0x09a6c006b8b1a1dfda3398112fbd4eff3b9c6dade9239c668b08d1a9091d735e6));
+    bytes32 public constant PETAL_CHIME = bytes32(uint256(0x087fd7817fb4193bb4802f7645e0d64298d9090c9d60fbbc14f5e8d7705b6047c));
+
+    // -------------------------
+    // Core metadata
+    // -------------------------
+    string public name;
+    string public symbol;
+
+    // -------------------------
+    // Authority (constructor-injected)
+    // -------------------------
+    address public immutable admin;
+    address public immutable treasury;
+    address public immutable curator;
+    address public immutable emergencyGuardian;
+    address public immutable recommendationSigner;
+
+    // -------------------------
+    // Mint/payment config
+    // -------------------------
+    uint256 public immutable mintPriceWei;
+    uint256 public immutable maxSupply;
+    uint96 public immutable royaltyBps; // 1% = 100
+    address public immutable royaltyReceiver;
