@@ -502,3 +502,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
         address signer = FlorECDSA.recover(FlorECDSA.toEthSignedMessageHash(permitHash), signature);
         if (signer != recommendationSigner) revert Flourisha_SignatureMismatch();
 
+        uint64 expected = userNonce[msg.sender] + 1;
+        if (p.nonce != expected) revert Flourisha_WrongValue();
+        userNonce[msg.sender] = p.nonce;
+
+        uint256 fee = (msg.value * uint256(p.feeBps)) / 10_000;
+        uint256 rest = msg.value - fee;
+
+        _mintInternal(msg.sender, p.paletteId, p.bloomId, p.seed, msg.value);
+
+        if (fee != 0) _forwardValue(p.feeSink, fee);
+        _forwardValue(treasury, rest);
+
+        emit FlourishaPermitRedeemed(msg.sender, permitHash, p.nonce, block.number);
+    }
+
+    function _mintInternal(address to, uint64 paletteId, uint64 bloomId, uint128 seed, uint256 paidWei) internal {
+        if (totalSupply >= maxSupply) revert Flourisha_SupplyExhausted();
+        if (to == address(0)) revert Flourisha_BadRecipient();
+        uint256 tokenId;
+        unchecked {
+            tokenId = totalSupply + 1;
+            totalSupply = tokenId;
+            _balanceOf[to] += 1;
+        }
+        _ownerOf[tokenId] = to;
+        lookOf[tokenId] = LookSeed({paletteId: paletteId, bloomId: bloomId, seed: seed});
+        emit Transfer(address(0), to, tokenId);
+        emit FlourishaLookMinted(to, tokenId, paletteId, bloomId, seed, paidWei);
+    }
+
+    // -------------------------
+    // Curator publishing
+    // -------------------------
+    function publishPalette(string calldata paletteName, string[] calldata hexes, uint8 mood, bool active)
+        external
+        onlyCurator
+        whenNotPaused
+    {
+        if (hexes.length < 3 || hexes.length > 12) revert Flourisha_WrongValue();
+        paletteCount += 1;
+        uint64 pid = paletteCount;
+
+        Palette storage p = _palettes[pid];
+        p.name = paletteName;
+        p.createdAt = uint64(block.timestamp);
+        p.mood = mood;
+        p.active = active;
+
+        for (uint256 i = 0; i < hexes.length; i++) {
+            p.hexes.push(hexes[i]);
+            emit FlourishaPaletteColor(pid, i, hexes[i]);
+        }
+
+        emit FlourishaPalettePublished(pid, paletteName, mood, active);
+    }
+
+    function setPaletteActive(uint64 paletteId, bool active) external onlyCurator whenNotPaused {
+        Palette storage p = _palettes[paletteId];
+        if (p.createdAt == 0) revert Flourisha_PaletteMissing();
+        p.active = active;
+        emit FlourishaPalettePublished(paletteId, p.name, p.mood, active);
+    }
+
+    function palette(uint64 paletteId) external view returns (string memory paletteName, string[] memory hexes, uint64 createdAt, uint8 mood, bool active) {
+        Palette storage p = _palettes[paletteId];
+        if (p.createdAt == 0) revert Flourisha_PaletteMissing();
+        paletteName = p.name;
+        createdAt = p.createdAt;
+        mood = p.mood;
+        active = p.active;
+        hexes = new string[](p.hexes.length);
+        for (uint256 i = 0; i < p.hexes.length; i++) hexes[i] = p.hexes[i];
