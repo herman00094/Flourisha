@@ -214,3 +214,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
     uint256 public immutable maxSupply;
     uint96 public immutable royaltyBps; // 1% = 100
     address public immutable royaltyReceiver;
+
+    // -------------------------
+    // Storage: ERC721-lite
+    // -------------------------
+    mapping(uint256 => address) private _ownerOf;
+    mapping(address => uint256) private _balanceOf;
+    mapping(uint256 => address) private _tokenApprovals;
+    mapping(address => mapping(address => bool)) private _operatorApprovals;
+
+    // -------------------------
+    // Storage: Flourisha content
+    // -------------------------
+    struct LookSeed {
+        uint64 paletteId;
+        uint64 bloomId;
+        uint128 seed;
+    }
+
+    struct Palette {
+        string name;
+        string[] hexes; // e.g. ["#0b1320", "#e2c39a"]
+        uint64 createdAt;
+        uint8 mood; // 0..255, used for UI hints
+        bool active;
+    }
+
+    struct PromptFrame {
+        string title;
+        string[] lines;
+        uint64 createdAt;
+        bool active;
+    }
+
+    uint256 public totalSupply;
+    mapping(uint256 => LookSeed) public lookOf;
+    mapping(uint64 => Palette) private _palettes;
+    mapping(uint64 => PromptFrame) private _frames;
+    uint64 public paletteCount;
+    uint64 public frameCount;
+
+    // -------------------------
+    // Anti-replay + redeem permits
+    // -------------------------
+    mapping(bytes32 => bool) public usedPermit;
+    mapping(address => uint64) public userNonce;
+
+    // -------------------------
+    // Events / errors (distinct naming)
+    // -------------------------
+    event FlourishaLookMinted(
+        address indexed user,
+        uint256 indexed tokenId,
+        uint64 indexed paletteId,
+        uint64 bloomId,
+        uint128 seed,
+        uint256 paidWei
+    );
+    event FlourishaPalettePublished(uint64 indexed paletteId, string name, uint8 mood, bool active);
+    event FlourishaFramePublished(uint64 indexed frameId, string title, bool active);
+    event FlourishaFrameLine(uint64 indexed frameId, uint256 indexed lineIndex, string text);
+    event FlourishaPaletteColor(uint64 indexed paletteId, uint256 indexed index, string hexColor);
+    event FlourishaPermitRedeemed(address indexed user, bytes32 indexed permitHash, uint64 indexed usedNonce, uint256 atBlock);
+    event FlourishaEmergencySweep(address indexed to, uint256 amountWei, uint256 atBlock);
+
+    error Flourisha_OnlyAdmin();
+    error Flourisha_OnlyCurator();
+    error Flourisha_OnlyGuardian();
+    error Flourisha_BadAddress();
+    error Flourisha_SupplyExhausted();
+    error Flourisha_WrongValue();
+    error Flourisha_NotOwnerNorApproved();
+    error Flourisha_BadRecipient();
