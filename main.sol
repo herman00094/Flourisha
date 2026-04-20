@@ -358,3 +358,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
     function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC721).interfaceId
             || interfaceId == type(IERC2981).interfaceId;
+    }
+
+    // -------------------------
+    // ERC721-lite view
+    // -------------------------
+    function balanceOf(address owner) external view override returns (uint256) {
+        if (owner == address(0)) revert Flourisha_BadAddress();
+        return _balanceOf[owner];
+    }
+
+    function ownerOf(uint256 tokenId) public view override returns (address) {
+        address owner = _ownerOf[tokenId];
+        if (owner == address(0)) revert Flourisha_TokenMissing();
+        return owner;
+    }
+
+    function getApproved(uint256 tokenId) external view override returns (address) {
+        if (_ownerOf[tokenId] == address(0)) revert Flourisha_TokenMissing();
+        return _tokenApprovals[tokenId];
+    }
+
+    function isApprovedForAll(address owner, address operator) external view override returns (bool) {
+        return _operatorApprovals[owner][operator];
+    }
+
+    // -------------------------
+    // ERC721-lite approvals
+    // -------------------------
+    function approve(address to, uint256 tokenId) external override whenNotPaused {
+        address owner = ownerOf(tokenId);
+        if (msg.sender != owner && !_operatorApprovals[owner][msg.sender]) revert Flourisha_NotOwnerNorApproved();
+        _tokenApprovals[tokenId] = to;
+        emit Approval(owner, to, tokenId);
+    }
+
+    function setApprovalForAll(address operator, bool approved) external override whenNotPaused {
+        _operatorApprovals[msg.sender][operator] = approved;
+        emit ApprovalForAll(msg.sender, operator, approved);
+    }
+
+    // -------------------------
+    // Transfers
+    // -------------------------
+    function transferFrom(address from, address to, uint256 tokenId) public override whenNotPaused {
+        if (to == address(0)) revert Flourisha_BadRecipient();
+        address owner = ownerOf(tokenId);
+        if (owner != from) revert Flourisha_NotOwnerNorApproved();
+        if (!_isApprovedOrOwner(msg.sender, tokenId, owner)) revert Flourisha_NotOwnerNorApproved();
+
+        delete _tokenApprovals[tokenId];
+        unchecked {
+            _balanceOf[from] -= 1;
+            _balanceOf[to] += 1;
+        }
+        _ownerOf[tokenId] = to;
+        emit Transfer(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId) external override {
+        safeTransferFrom(from, to, tokenId, "");
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public override whenNotPaused {
+        transferFrom(from, to, tokenId);
+        if (to.code.length != 0) {
+            try IERC721Receiver(to).onERC721Received(msg.sender, from, tokenId, data) returns (bytes4 ret) {
+                if (ret != IERC721Receiver.onERC721Received.selector) revert Flourisha_UnsafeRecipient();
+            } catch {
+                revert Flourisha_UnsafeRecipient();
+            }
+        }
+    }
