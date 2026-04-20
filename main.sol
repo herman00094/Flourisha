@@ -286,3 +286,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
     error Flourisha_WrongValue();
     error Flourisha_NotOwnerNorApproved();
     error Flourisha_BadRecipient();
+    error Flourisha_TokenMissing();
+    error Flourisha_UnsafeRecipient();
+    error Flourisha_PermitUsed();
+    error Flourisha_SignatureMismatch();
+    error Flourisha_FrameMissing();
+    error Flourisha_PaletteMissing();
+    error Flourisha_NotActive();
+
+    // -------------------------
+    // Constructor
+    // -------------------------
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        address admin_,
+        address treasury_,
+        address curator_,
+        address emergencyGuardian_,
+        address recommendationSigner_,
+        uint256 mintPriceWei_,
+        uint256 maxSupply_,
+        address royaltyReceiver_,
+        uint96 royaltyBps_
+    ) {
+        if (
+            admin_ == address(0) || treasury_ == address(0) || curator_ == address(0) || emergencyGuardian_ == address(0)
+                || recommendationSigner_ == address(0) || royaltyReceiver_ == address(0)
+        ) revert Flourisha_BadAddress();
+        if (royaltyBps_ > 2500) revert Flourisha_WrongValue(); // hard cap at 25% (mainnet sanity)
+        if (maxSupply_ == 0) revert Flourisha_WrongValue();
+
+        name = name_;
+        symbol = symbol_;
+
+        admin = admin_;
+        treasury = treasury_;
+        curator = curator_;
+        emergencyGuardian = emergencyGuardian_;
+        recommendationSigner = recommendationSigner_;
+
+        mintPriceWei = mintPriceWei_;
+        maxSupply = maxSupply_;
+        royaltyReceiver = royaltyReceiver_;
+        royaltyBps = royaltyBps_;
+
+        _seedInitialCatalog();
+    }
+
+    // -------------------------
+    // Modifiers
+    // -------------------------
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert Flourisha_OnlyAdmin();
+        _;
+    }
+
+    modifier onlyCurator() {
+        if (msg.sender != curator) revert Flourisha_OnlyCurator();
+        _;
+    }
+
+    modifier onlyGuardian() {
+        if (msg.sender != emergencyGuardian) revert Flourisha_OnlyGuardian();
+        _;
+    }
+
+    // -------------------------
+    // ERC165
+    // -------------------------
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
+        return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC721).interfaceId
+            || interfaceId == type(IERC2981).interfaceId;
