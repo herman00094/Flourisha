@@ -574,3 +574,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
         active = p.active;
         hexes = new string[](p.hexes.length);
         for (uint256 i = 0; i < p.hexes.length; i++) hexes[i] = p.hexes[i];
+    }
+
+    function publishFrame(string calldata title, string[] calldata lines, bool active) external onlyCurator whenNotPaused {
+        if (lines.length < 2 || lines.length > 18) revert Flourisha_WrongValue();
+        frameCount += 1;
+        uint64 fid = frameCount;
+
+        PromptFrame storage f = _frames[fid];
+        f.title = title;
+        f.createdAt = uint64(block.timestamp);
+        f.active = active;
+        for (uint256 i = 0; i < lines.length; i++) {
+            f.lines.push(lines[i]);
+            emit FlourishaFrameLine(fid, i, lines[i]);
+        }
+        emit FlourishaFramePublished(fid, title, active);
+    }
+
+    function setFrameActive(uint64 frameId, bool active) external onlyCurator whenNotPaused {
+        PromptFrame storage f = _frames[frameId];
+        if (f.createdAt == 0) revert Flourisha_FrameMissing();
+        f.active = active;
+        emit FlourishaFramePublished(frameId, f.title, active);
+    }
+
+    function frame(uint64 frameId) external view returns (string memory title, string[] memory lines, uint64 createdAt, bool active) {
+        PromptFrame storage f = _frames[frameId];
+        if (f.createdAt == 0) revert Flourisha_FrameMissing();
+        title = f.title;
+        createdAt = f.createdAt;
+        active = f.active;
+        lines = new string[](f.lines.length);
+        for (uint256 i = 0; i < f.lines.length; i++) lines[i] = f.lines[i];
+    }
+
+    // -------------------------
+    // Safety controls
+    // -------------------------
+    function pause() external onlyGuardian {
+        _pause();
+    }
+
+    function unpause() external onlyAdmin {
+        _unpause();
+    }
+
+    function emergencySweep(address payable to) external onlyGuardian whenPaused nonReentrant {
+        if (to == address(0)) revert Flourisha_BadRecipient();
+        uint256 bal = address(this).balance;
+        (bool ok,) = to.call{value: bal}("");
+        if (!ok) revert Flourisha_WrongValue();
+        emit FlourishaEmergencySweep(to, bal, block.number);
+    }
+
+    // -------------------------
+    // tokenURI: fully onchain SVG + JSON
+    // -------------------------
+    function tokenURI(uint256 tokenId) external view returns (string memory) {
+        address owner = _ownerOf[tokenId];
+        if (owner == address(0)) revert Flourisha_TokenMissing();
+
+        LookSeed memory ls = lookOf[tokenId];
+        Palette storage p = _palettes[ls.paletteId];
+        if (p.createdAt == 0) revert Flourisha_PaletteMissing();
+
+        (string memory svg, string memory traits) = _renderSVGAndTraits(tokenId, ls, p);
+        string memory image = string(abi.encodePacked("data:image/svg+xml;base64,", FlorBase64.encode(bytes(svg))));
+
+        string memory json = string(
+            abi.encodePacked(
+                "{",
+                "\"name\":\"Flourisha Look #",
