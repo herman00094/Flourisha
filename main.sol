@@ -646,3 +646,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
             abi.encodePacked(
                 "{",
                 "\"name\":\"Flourisha Look #",
+                tokenId.toString(),
+                "\",",
+                "\"description\":\"Onchain floral styling artifact for health+style routines.\",",
+                "\"image\":\"",
+                image,
+                "\",",
+                "\"attributes\":",
+                traits,
+                "}"
+            )
+        );
+        return string(abi.encodePacked("data:application/json;base64,", FlorBase64.encode(bytes(json))));
+    }
+
+    function _renderSVGAndTraits(uint256 tokenId, LookSeed memory ls, Palette storage p)
+        internal
+        view
+        returns (string memory svg, string memory traits)
+    {
+        string memory bg = p.hexes[0];
+        string memory accent = p.hexes[p.hexes.length - 1];
+        string memory mid = p.hexes[p.hexes.length / 2];
+
+        (uint256 petals, uint256 rings, uint256 grain) = _deriveBloom(ls.seed, ls.bloomId);
+        string memory petalsSvg = _petals(ls.seed, petals, accent, mid);
+        string memory overlay = _grain(grain, tokenId);
+
+        svg = string(
+            abi.encodePacked(
+                "<svg xmlns='http://www.w3.org/2000/svg' width='1024' height='1024' viewBox='0 0 1024 1024'>",
+                "<defs>",
+                "<radialGradient id='g' cx='50%' cy='45%' r='70%'>",
+                "<stop offset='0%' stop-color='",
+                mid,
+                "' stop-opacity='0.92'/>",
+                "<stop offset='65%' stop-color='",
+                bg,
+                "' stop-opacity='0.98'/>",
+                "<stop offset='100%' stop-color='",
+                accent,
+                "' stop-opacity='1'/>",
+                "</radialGradient>",
+                "<filter id='soft' x='-20%' y='-20%' width='140%' height='140%'>",
+                "<feGaussianBlur stdDeviation='5'/>",
+                "</filter>",
+                "</defs>",
+                "<rect width='1024' height='1024' fill='url(#g)'/>",
+                "<g opacity='0.95' filter='url(#soft)' transform='translate(512 512)'>",
+                _rings(rings, p),
+                "</g>",
+                "<g opacity='0.96' transform='translate(512 512)'>",
+                petalsSvg,
+                "</g>",
+                overlay,
+                "<g font-family='ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto' fill='",
+                mid,
+                "' opacity='0.85'>",
+                "<text x='48' y='92' font-size='34'>Flourisha</text>",
+                "<text x='48' y='132' font-size='20'>palette ",
+                uint256(ls.paletteId).toString(),
+                " • bloom ",
+                uint256(ls.bloomId).toString(),
+                "</text>",
+                "</g>",
+                "</svg>"
+            )
+        );
+
+        traits = string(
+            abi.encodePacked(
+                "[",
+                _trait("Palette", p.name),
