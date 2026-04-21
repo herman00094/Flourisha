@@ -934,3 +934,69 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
             lines[3] = "Give 2 outfit options: subtle bloom + bold bloom.";
             lines[4] = "Include one accessory and one fragrance note.";
             lines[5] = "End with a 7-word mantra.";
+            _seedFrame("Daily Bloom Routine", lines, true);
+        }
+        {
+            string[] memory lines = new string[](5);
+            lines[0] = "Ask for: location, weather, and time window.";
+            lines[1] = "Suggest: base layer, statement layer, footwear.";
+            lines[2] = "Choose a floral motif (rose, iris, dahlia, jasmine).";
+            lines[3] = "Pick a palette from the onchain list if possible.";
+            lines[4] = "Provide a compact packing list.";
+            _seedFrame("Street-of-Asha Planner", lines, true);
+        }
+    }
+
+    function _seedPalette(string memory paletteName, string[] memory hexes, uint8 mood, bool active) internal {
+        paletteCount += 1;
+        uint64 pid = paletteCount;
+        Palette storage p = _palettes[pid];
+        p.name = paletteName;
+        p.createdAt = uint64(block.timestamp);
+        p.mood = mood;
+        p.active = active;
+        for (uint256 i = 0; i < hexes.length; i++) {
+            p.hexes.push(hexes[i]);
+            emit FlourishaPaletteColor(pid, i, hexes[i]);
+        }
+        emit FlourishaPalettePublished(pid, paletteName, mood, active);
+    }
+
+    function _seedFrame(string memory title, string[] memory lines, bool active) internal {
+        frameCount += 1;
+        uint64 fid = frameCount;
+        PromptFrame storage f = _frames[fid];
+        f.title = title;
+        f.createdAt = uint64(block.timestamp);
+        f.active = active;
+        for (uint256 i = 0; i < lines.length; i++) {
+            f.lines.push(lines[i]);
+            emit FlourishaFrameLine(fid, i, lines[i]);
+        }
+        emit FlourishaFramePublished(fid, title, active);
+    }
+}
+
+/// @notice Deploy helper that requires no manual parameter filling.
+/// @dev Deploy this launchpad once; it deploys `Flourisha` with per-contract unique literals.
+contract FlourishaLaunchpad {
+    event FlourishaLaunched(address indexed flourisha, address indexed launcher);
+
+    function launch() external returns (address flourishaAddr) {
+        Flourisha f = new Flourisha(
+            "flourisha",
+            "FLWR",
+            0x420D64E538F86E3B0CACA40BE5856DADAE2cD88f, // admin
+            0xd71b0B83763f5EA62df2B484fE7E20400E653a2d, // treasury
+            0xfF5d236C7975197eD9f8b106D3351eeC5EEBe67F, // curator
+            0xA272Fb6BED08CB104e0F7630DE7964FB4a7900D7, // emergencyGuardian
+            0xBDDC175Fc4B226af659bc5813100E8dD0E886673, // recommendationSigner
+            18_900_000_000_000_000, // mintPriceWei (0.0189 ETH)
+            7777, // maxSupply
+            0x593398B3c0d1D7EEFf566A2C52E3fA416ef0908E, // royaltyReceiver
+            444 // royaltyBps (4.44%)
+        );
+        flourishaAddr = address(f);
+        emit FlourishaLaunched(flourishaAddr, msg.sender);
+    }
+}
