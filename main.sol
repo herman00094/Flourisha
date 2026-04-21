@@ -862,3 +862,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
                     xi.toString(),
                     "' y='",
                     yi.toString(),
+                    "' width='",
+                    si.toString(),
+                    "' height='",
+                    si.toString(),
+                    "' fill='#ffffff' fill-opacity='0.",
+                    _two(oi),
+                    "'/>"
+                )
+            );
+        }
+        out = string(abi.encodePacked(out, "</g>"));
+        return out;
+    }
+
+    // -------------------------
+    // Internals
+    // -------------------------
+    function _forwardValue(address to, uint256 amount) internal {
+        (bool ok,) = payable(to).call{value: amount}("");
+        if (!ok) revert Flourisha_WrongValue();
+    }
+
+    function _requirePaletteActive(uint64 paletteId) internal view {
+        Palette storage p = _palettes[paletteId];
+        if (p.createdAt == 0) revert Flourisha_PaletteMissing();
+        if (!p.active) revert Flourisha_NotActive();
+    }
+
+    function _seedInitialCatalog() internal {
+        // A small initial catalog keeps tokenURI stable even if curator never publishes.
+        {
+            string[] memory hexes = new string[](7);
+            hexes[0] = "#0b1020";
+            hexes[1] = "#19324a";
+            hexes[2] = "#2d5663";
+            hexes[3] = "#e3c6a6";
+            hexes[4] = "#f7efe6";
+            hexes[5] = "#c47a67";
+            hexes[6] = "#7a2f3b";
+            _seedPalette("Neroli Night", hexes, 211, true);
+        }
+        {
+            string[] memory hexes = new string[](6);
+            hexes[0] = "#081a13";
+            hexes[1] = "#19422f";
+            hexes[2] = "#5bbd8c";
+            hexes[3] = "#f3f0d7";
+            hexes[4] = "#e8a96a";
+            hexes[5] = "#b2453d";
+            _seedPalette("Garden Gym", hexes, 123, true);
+        }
+        {
+            string[] memory hexes = new string[](8);
+            hexes[0] = "#0c0c12";
+            hexes[1] = "#2a1a3a";
+            hexes[2] = "#4f2c6e";
+            hexes[3] = "#9d66cf";
+            hexes[4] = "#f3e9ff";
+            hexes[5] = "#f1c3dd";
+            hexes[6] = "#d85aa3";
+            hexes[7] = "#6e1d53";
+            _seedPalette("Lavender Pulse", hexes, 198, true);
+        }
+
+        {
+            string[] memory lines = new string[](6);
+            lines[0] = "You are Flourisha, a health+style bot with floral design literacy.";
+            lines[1] = "Respond in short steps: hygiene, movement, nutrition, outfit.";
+            lines[2] = "If the user gives a venue, match colors + silhouette to vibe.";
+            lines[3] = "Give 2 outfit options: subtle bloom + bold bloom.";
+            lines[4] = "Include one accessory and one fragrance note.";
+            lines[5] = "End with a 7-word mantra.";
