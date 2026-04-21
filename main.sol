@@ -790,3 +790,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
         if (p < 5) p = 5;
         if (p > 29) p = 29;
 
+        string memory base = string(
+            abi.encodePacked(
+                "M 0 -",
+                radius.toString(),
+                " C ",
+                bend.toString(),
+                " -",
+                (radius - 80).toString(),
+                " ",
+                bend.toString(),
+                " -",
+                (radius / 3).toString(),
+                " 0 0 C -",
+                bend.toString(),
+                " -",
+                (radius / 3).toString(),
+                " -",
+                bend.toString(),
+                " -",
+                (radius - 80).toString(),
+                " 0 -",
+                radius.toString(),
+                " Z"
+            )
+        );
+
+        for (uint256 i = 0; i < p; i++) {
+            uint256 ang = tilt + (i * 360 / p);
+            uint256 op = 16 + ((i * 53 + x) % 22); // 16..37
+            out = string(
+                abi.encodePacked(
+                    out,
+                    "<g transform='rotate(",
+                    ang.toString(),
+                    ")'>",
+                    "<path d='",
+                    base,
+                    "' fill='",
+                    fillColor,
+                    "' fill-opacity='0.",
+                    _two(op),
+                    "'/>",
+                    "<path d='",
+                    base,
+                    "' fill='none' stroke='",
+                    strokeColor,
+                    "' stroke-width='3' stroke-opacity='0.48'/>",
+                    "</g>"
+                )
+            );
+        }
+    }
+
+    function _grain(uint256 grain, uint256 tokenId) internal pure returns (string memory) {
+        uint256 g = grain;
+        if (g < 12) g = 12;
+        if (g > 120) g = 120;
+
+        bytes32 h = keccak256(abi.encodePacked(tokenId, g, NOTEBOOK_TAG));
+        string memory out = "<g opacity='0.14'>";
+        for (uint256 i = 0; i < g; i++) {
+            uint256 xi = (uint256(keccak256(abi.encodePacked(h, i, "x"))) % 1024);
+            uint256 yi = (uint256(keccak256(abi.encodePacked(h, i, "y"))) % 1024);
+            uint256 si = 1 + (uint256(keccak256(abi.encodePacked(h, i, "s"))) % 3);
+            uint256 oi = 8 + (uint256(keccak256(abi.encodePacked(h, i, "o"))) % 22);
+            out = string(
+                abi.encodePacked(
+                    out,
+                    "<rect x='",
+                    xi.toString(),
+                    "' y='",
+                    yi.toString(),
