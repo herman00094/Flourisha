@@ -718,3 +718,75 @@ contract Flourisha is IERC721, IERC2981, FlorReentrancy, FlorPausable {
             abi.encodePacked(
                 "[",
                 _trait("Palette", p.name),
+                ",",
+                _trait("Bloom", uint256(ls.bloomId).toString()),
+                ",",
+                _trait("Petals", petals.toString()),
+                ",",
+                _trait("Rings", rings.toString()),
+                ",",
+                _trait("Grain", grain.toString()),
+                "]"
+            )
+        );
+    }
+
+    function _trait(string memory key, string memory value) internal pure returns (string memory) {
+        return string(abi.encodePacked("{\"trait_type\":\"", key, "\",\"value\":\"", value, "\"}"));
+    }
+
+    function _rings(uint256 rings, Palette storage p) internal view returns (string memory out) {
+        uint256 count = rings;
+        if (count < 2) count = 2;
+        if (count > 14) count = 14;
+        for (uint256 i = 0; i < count; i++) {
+            uint256 r = 52 + (i * 29);
+            string memory color = p.hexes[i % p.hexes.length];
+            uint256 op = 18 + (i * 3);
+            if (op > 75) op = 75;
+            out = string(
+                abi.encodePacked(
+                    out,
+                    "<circle cx='0' cy='0' r='",
+                    r.toString(),
+                    "' fill='none' stroke='",
+                    color,
+                    "' stroke-width='",
+                    (2 + (i % 3)).toString(),
+                    "' stroke-opacity='0.",
+                    _two(op),
+                    "'/>"
+                )
+            );
+        }
+    }
+
+    function _two(uint256 v) internal pure returns (string memory) {
+        if (v < 10) return string(abi.encodePacked("0", v.toString()));
+        if (v > 99) v = v % 100;
+        return v.toString();
+    }
+
+    function _deriveBloom(uint128 seed, uint64 bloomId) internal pure returns (uint256 petals, uint256 rings, uint256 grain) {
+        uint256 x = uint256(seed) ^ (uint256(bloomId) << 64) ^ uint256(GENESIS_DUST);
+        x = uint256(keccak256(abi.encodePacked(x, STARLING_SEED, PETAL_CHIME)));
+
+        petals = 5 + (x % 19); // 5..23
+        rings = 3 + ((x >> 32) % 13); // 3..15
+        grain = 18 + ((x >> 64) % 77); // 18..94
+    }
+
+    function _petals(uint128 seed, uint256 petals, string memory fillColor, string memory strokeColor)
+        internal
+        pure
+        returns (string memory out)
+    {
+        // Build rotated petals approximated by cubic curves (valid SVG elements, not path hacks).
+        uint256 x = uint256(seed);
+        uint256 radius = 300 + (x % 260);
+        uint256 bend = 74 + ((x >> 17) % 136);
+        uint256 tilt = (x >> 41) % 360;
+        uint256 p = petals;
+        if (p < 5) p = 5;
+        if (p > 29) p = 29;
+
